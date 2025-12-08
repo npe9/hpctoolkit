@@ -10,6 +10,108 @@ All notable changes and releases to this project will be documented in this file
 
 Recent releases are formatted loosely based on [Common Changelog](https://common-changelog.org/), a more restrictive subset of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2025.1.0] - 2025-12-07
+
+### Added
+
+- **hpcrun:**
+  - Added support for **Intel PC Sampling** using the Level Zero API ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1350)).
+    - Implemented **tile attribution** for Intel Level Zero PC samples in both explicit and implicit scaling modes by encoding tile ID in the unused high bits (48-63) of the instruction pointer.
+    - Fixed correlation channel isolation for multi-GPU systems by implementing per-device correlation channels instead of a hard-coded index.
+- **hpcstruct:**
+  - Added the **`-x|--exclude`** option to `hpcstruct` to specify a pattern for library names not to analyze ([!1321](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1321)).
+- **documentation:**
+  - Added documentation to the manual for `hpcstruct` ([!1325](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1325)).
+- **build/CI:**
+  - Added new quality tooling targets: **`quality-collect`** (collects code quality data) and **`quality-codeclimate`** (renders data in GitLab Code Climate JSON). The tools are controlled by the new `-Ddev_quality=enabled` feature option, and the first tool included is **CodeChecker**.
+  - Added an option to disable **Intel Xed** instruction decoder at build time via the new `-Dxed` feature option [!1379](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1379)).
+  - Added new commands to `hpctesttool` for debugging: **`hpctesttool diff LHS RHS`** and **`hpctesttool yaml DB OUTPUT`** ([!1328](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1328)).
+  - Added a test of **LD_AUDIT** wrapping of `getenv` [!1339](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1339)).
+  - Added a DTV test to check the auditor DTV patch [!1338](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1338)).
+  - Added a **Boost** wrap as a subproject [!1334](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1334)).
+
+### Changed
+
+- **hpcrun:**
+  - **GPU Measurement Subsystem Overhaul (AMD, NVIDIA, Intel):**
+    - Use **multiple-producer, single-consumer (MPSC) wait-free queues** for communication between GPU monitoring threads and application threads.
+    - Replace support for AMD GPUs based on **Rocprofiler** and **Roctracer** with support for AMD's new **Rocprofiler-sdk**. [!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1317)).
+    - **ROCm stochastic sampling** logic was updated to use `GCYCLES` and adjusted command line handling [!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1368)).
+    - Refined PC sampling measurements ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371))
+      - Changed the PC sampling metric from `GINS` to **`GCYCLES`**, scaled metric by period, and updated all default PC sampling frequencies to 2^{20}.
+      - `GCYCLES:ISU`: all issued instructions, with subtypes for different kinds of issues
+      - `GCYCLES:STL`: only show exposed stalls, with subtypes for different kinds of stalls
+      - Updated `hpcrun` to record the **exact instruction offset** of the sample in the trace instead of the enclosing function's first PC, fixing misleading attribution in inlined functions [!1354](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1354)).
+    - Reduced GPU metrics displayed
+      - for GXCOPY, show only time and count by default
+      - for GMEM: show only time and count by default
+      - for GMSET: show only time and count by default
+    - Deprecated the use of `"gpu=nvidia"` and `"gpu=amd"`, replacing them with **`"gpu=cuda"`** and **`"gpu=rocm"`** respectively.
+    - Improved GPU profiling metrics ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371))
+      - Renamed `GKER:BLKS` to `GKER:BLKS_AVG` for clarity (the average number of blocks in a kernel launch)
+      - Corrected the implementation of `GKER:BLKS_AVG` for NVIDIA GPUs
+      - Renamed `FGP_ACT` and `FGP_MAX` with `WARP_ACT` and `WARP_AVL` for consistency with AMD metrics
+      - Corrected calculation of GKER:BLKS_AVG for AMD GPUs
+- **hpcstruct:**
+  - Updated to require `--gpucfg yes` to perform CFG analysis and add call sites for Intel GPU binaries ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371))
+  - Replaced implementation of `--clean` to use wildcards (`*.hpcstruct` and `*.warnings`) to ensure all related files are removed, fixing an issue with GPU binaries [!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1377)).
+  - Disabled recovery of call sites in Intel GPU binaries as `hpcprof` cannot cope with overlapping code [!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1371)).
+- **hpcprof:**
+  - Removed serialization in `hpcprof`'s `SparseDB` (the "prebuffer") which improves parallel efficiency and reduces memory usage [!1323](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1323)).
+  - Wrapped the warning about disordered traces in `hpcprof` to print at most once per rank [!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1359)).
+- **build/CI:**
+  - Updated all `hpcprof` tests to run with **`-M stats`** instead of the default case, including all additional statistics to catch potential numerical errors [!1365](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1365)).
+  - The `hpcprof-mpi` tests were restored but guarded by a new feature flag, `-Dhpcprof_mpi_tests` [!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1324)).
+  - Replaced the non-generating **clang-tidy** CI job with **CodeChecker** [!1373](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1373)).
+  - Limited the GitLab Pages `pages` job to run only for versions intended for deployment (default branch and released tags) to avoid failures in MR pipelines ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1369)).
+  - Baked external tool paths (`grep`, `awk`, `sed`, `make`) into the `hpcstruct` Makefile at setup time to ensure they are installed and allow overrides ([!1358](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1358)).
+  - Updated Continuous Integration (CI) jobs to use optimized allocations, including merging compile/test jobs for HPSF CI and ppc64le, and not including debug info for compile jobs ([!1305](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1305)).
+- **documentation:**
+  - Refined user manual and man pages ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371))
+    - Rewrote GPU section of manual.
+    - Updated OpenMP section of manual.
+    - Revealed OpenMP chapter in the manual as a top-level entity.
+    - Updated `qs-cct` and `qs-no-cct` figures with GCYCLES metrics.
+    - Added `qs-profile-metrics` figure discussing NVIDIA metrics.
+    - Removed stale and irrelevant information about launching with ALPS in user manual and hpcrun man page.
+    - Shortened section and chapter titles for a better presentation of documentation in a browser
+    - Added section numbers.
+
+### Fixed
+
+- **hpcrun:**
+  - Fixed an issue in `hpcrun` where Level Zero could destroy modules it didn't create during module map finalization, by ignoring delete calls for non-existent entries ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)).
+  - Fixed an issue where **Level Zero PC sampling** would hang indefinitely when applications launched kernels without providing a signal event handle ([!1367](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1367)).
+  - Fixed a critical race condition in Level Zero PC sampling profiler initialization by using **`PROFILER_UNKNOWN`** as the initial state, preventing premature exiting of the wait loop ([!1367](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1367)).
+  - Fixed an issue where Level Zero PC sampling correlation channel hard-coding caused cross-device interference in multi-GPU systems, by implementing per-device channels ([!1367](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1367)).
+  - Fixed an issue where setting `latencySamples` to 0 for Intel Level Zero PC sampling caused stall reasons to disappear in `hpcviewer` ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1350)).
+  - Fixed the failure to skip calls that couldn't be understood in Intel GPU binaries for `hpcrun` ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)).
+  - Fixed an issue to prevent `hpcrun`'s python foil from calling `dlclose(NULL)` if `dlopen` failed ([!1352](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1352)).
+  - Removed the spinlock from `hpctoolkit_demangle()`, improving `hpcstruct` performance ([!1355](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1355)).
+  - Fixed issues with the auditor to ensure `hpcrun` dependencies that call `getenv` directly go through **libc `getenv`** during HPCToolkit initialization ([!1333](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1236%5D)).
+  - Fixed warnings on CUDA $\\ge$ 13.0 and ROCm on ICX ([!1364](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1364)).
+  - Disabled PC sampling for CUDA $\\ge$ 13.0, as the protocol has changed and is currently unsupported ([!1348](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1348)).
+  - Fixed an issue where PC sampling state was not properly reset during Level Zero shutdown ([!1367](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1367)).
+- **hpcstruct:**
+  - Fixed recovery of CFGs and static call sites for Intel GPUs ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371))
+  - Fixed CFG construction debugging code that became stale ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371))
+- **hpcprof:**
+  - Fixed a crash in `hpcprof-mpi` with `-M stats` where Partials were only added to rank 0, by extending Metrics in all ranks with the requested set of Statistics/Partials [!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1365)).
+  - Fixed a numerical error in `hpcprof` when atomically combining non-zero data values (for `min()`/`max()` accumulators) by actively ignoring zeros ([!1365](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1365)).
+  - Fixed Expression evaluation errors in `hpcprof` where some operators were evaluated incorrectly [!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1365)).
+
+### Removed
+
+- **hpcrun:**
+  - Removed obsolete and unmaintained **Intel OpenCL + PAPI** support, OpenCL blame shifting code, and related GPU operation components ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1317)).
+  - Removed the redundant `devices_mutex_` protecting access to the devices map in Level Zero tracing callbacks ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1350)).
+- **build/CI:**
+  - Removed the Python `tools/make-venv.py` script ([!1343](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1343)).
+  - Removed the `api/` prefix from **GTPin headers** include paths ([!1329](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests!1329)).
+  - Removed the outdated and broken **clang-tidy** job from the CI pipeline ([!1373](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1373)).
+- **licenses:**
+  - Removed test data `*.license` files, now expressed implicitly via `REUSE.toml` ([!1357](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1357)).
+
 ## [2025.0.1] - 2025-09-09
 
 ### Added
