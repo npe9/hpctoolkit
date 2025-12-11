@@ -10,6 +10,78 @@ All notable changes and releases to this project will be documented in this file
 
 Recent releases are formatted loosely based on [Common Changelog](https://common-changelog.org/), a more restrictive subset of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [2025.1.0]
+
+### Added
+
+- Added support for software-based "host trap" PC sampling on AMD GPUs using `rocprofiler-sdk`. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Added support for measuring kernels on AMD GPUs using hardware counters using AMD's `rocprofiler-sdk`. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Added support that manages configuration of PC sampling and hardware counters on heterogeneous AMD GPUs using AMD's `rocprofiler-sdk`. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Added support for measuring GPU scratch space allocation, free, and asynchronous reclamation on AMD GPUs. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Added support for PC sampling on Intel GPUs using `Level Zero`'s `Metrics` API. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1350)) (Yuning Xia)
+- Added support for hardware-based "stochastic" PC sampling on AMD GPUs using `rocprofiler-sdk`. ([!1368](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1368)) (John Mellor-Crummey)
+- Implemented tile attribution for Intel Level Zero PC samples in both explicit and implicit scaling modes by encoding tile ID in the unused high bits (48-63) of the instruction pointer. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1350)) (Yuning Xia)
+- Added support for Intel PC Sampling on multi-GPU systems by using per-device correlation channels. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1350)) (Yuning Xia)
+- Added an `-x|--exclude` option to `hpcstruct` to specify a pattern for library names not to analyze. ([!1321](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1321)) (Mark Krentel)
+- Added new quality tooling targets: `quality-collect` (collects code quality data) and `quality-codeclimate` (renders data in GitLab Code Climate JSON). The tools are controlled by the new `-Ddev_quality=enabled` feature option, and the first tool included is `CodeChecker`. ([!1373](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1373)) (Jonathon Anderson)
+- Added a `--clean` option to `hpcstruct` to remove binary analysis from a measurement directory. ([!1377](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1377)) (Mark Krentel)
+- Added an option to disable Intel Xed instruction decoder at build time via the new `-Dxed` feature option. ([!1379](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1379)) (Jonathon Anderson)
+- Added new commands to `hpctesttool` for debugging: `hpctesttool diff LHS RHS`\*\* and `hpctesttool yaml DB OUTPUT`. ([!1328](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1328)) (Jonathon Anderson)
+- Added a test of `LD_AUDIT` wrapping of `getenv`. ([!1339](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1339)) (John Mellor-Crummey)
+- Added a test to check the auditor's patch to copy storage for glibc's dynamic thread vector into the heap before reallocation. ([!1338](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1338)) (John Mellor-Crummey)
+- Added a Boost wrap as a subproject. ([!1334](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1334)) (Jonathon Anderson)
+
+### Changed
+
+- Updated measurement support for AMD, NVIDIA, and Intel GPUs to use multiple-producer, single-consumer (MPSC) wait-free queues for communication between GPU monitoring threads and application threads. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Replaced support for profiling and tracing on AMD GPUs based on `Rocprofiler` and `Roctracer` with support for AMD's new `Rocprofiler-sdk`. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Replaced ad-hoc initialization of `hpcrun` when using AMD GPUs with principled support based on `Rocprofiler-sdk`'s new `rocprofiler_configure` callback and/or `rocprofiler_force_configure` API. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Replaced support for measuring GPU-offloaded OpenMP using OMPT API on AMD GPUs with use of ad-hoc support in `Rocprofiler-sdk`. ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Overhauled PC sampling code for AMD, Intel, and NVIDIA GPUs to all report GPU cycles (`GCYCLES`) rather than instructions (`GINS`) ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1368)).
+- Changed default PC sampling frequency for AMD, Intel, and NVIDIA GPUs to 2^{20} cycles or ns. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Integrated support for specifying the sampling frequency into command line options for configuring PC sampling AMD, Intel, and NVIDIA GPUs. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Changed PC sampling implementations to report instruction issues (`GCYCLES:ISU`) and exposed stalls (`GCYCLES:STL`), with subtypes for stall reasons. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Reduced GPU metrics shown for `GXCOPY`, `GMEM`, `GMSET` to only show time and count by default. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Updated `hpcrun` to record the exact instruction offset of the sample in the trace instead of the enclosing function's first PC, fixing misleading attribution in inlined functions. ([!1354](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1354)) (Jonathon Anderson)
+- Deprecated the use of `gpu=nvidia` and `gpu=amd` events in `hpcrun`, replacing them with `gpu=cuda` and `gpu=rocm` respectively. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Corrected `hpcrun`'s conversion of Level Zero 32-bit device timestamps to host time. ([!1360](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1360)) (John Mellor-Crummey)
+- Improved `hpcrun`'s GPU profiling metrics: corrected implementations of `GKER:BLKS` fir AMD and NVIDIA GPUs and renaed to `GKER:BLKS_AVG`. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Renamed `hpcrun`'s kernel metrics `FGP_ACT` and `FGP_MAX` for NVIDIA GPUs with `WARP_ACT` and `WARP_AVL` for consistency with AMD metrics. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Updated to `hpcstruct` to require `--gpucfg yes` to perform CFG analysis and add call sites for Intel GPU binaries. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371))
+- Improved parallel efficiency and memory usage of `hpcprof`. ([!1323](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1323)) (Jonathon Anderson)
+- Adjusted `hpcprof` to warn about disordered traces at most once. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1359)) (Jonathon Anderson)
+- Updated all `hpcprof` tests to run with `-M stats` instead of the default case, including all additional statistics to catch potential numerical errors. ([!1365](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1365)) (Jonathon Andersoon)
+- Restored `hpcprof-mpi` tests but guard with a new feature flag, `-Dhpcprof_mpi_tests`. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1324)) (Jonathon Anderson)
+- Replaced the non-generating `clang-tidy` CI job with `CodeChecker`. ([!1373](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1373)) (Jonathon Anderson)
+- Limited the GitLab Pages `pages` job to run only for versions intended for deployment (default branch and released tags) to avoid failures in MR pipelines. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1369)) (Jonathon Anderson)
+- Baked external tool paths (`grep`, `awk`, `sed`, `make`) into the `hpcstruct` Makefile at setup time to ensure they are installed and allow overrides. ([!1358](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1358)) (Jonathon Anderson)
+- Updated Continuous Integration (CI) jobs to use optimized allocations, including merging compile/test jobs for HPSF CI and ppc64le, and not including debug info for compile jobs. ([!1305](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1305)) (Jonathon Anderson)
+- Overhauled user manual by rewriting GPU measurement section, updating OpenMP section, removing outdated material, and adding section numbers ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+
+### Fixed
+
+- Fixed an issue in `hpcrun` where Level Zero could destroy modules it didn't create during module map finalization, by ignoring delete calls for non-existent entries. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Fixed an issue where Level Zero PC sampling correlation channel hard-coding caused cross-device interference in multi-GPU systems, by implementing per-device channels. ([!1367](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1367)) (Yuning Xia)
+- Fixed an issue where setting `latencySamples` to 0 for Intel Level Zero PC sampling caused stall reasons to disappear in `hpcviewer`. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1350)) (Yuning Xia)
+- Fixed an issue to prevent `hpcrun`'s python foil from calling `dlclose(NULL)` if `dlopen` failed. ([!1352](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1352)) (John Mellor-Crummey)
+- Removed the spinlock from `hpctoolkit_demangle()`, improving `hpcstruct` performance. ([!1355](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1355)) (John Mellor-Crummey)
+- Fixed issues with the auditor to ensure `hpcrun` dependencies that call `getenv` directly go through libc `getenv` during HPCToolkit initialization. ([!1333](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1236)) (John Mellor-Crummey)
+- Fixed warnings for CUDA >= 13.0 and ROCm when using Intel's `icx` compiler to build HPCToolkit. ([!1364](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1364)) (Jonathon Anderson)
+- Disabled PC sampling for CUDA >= 13.0, as the protocol has changed and is currently unsupported. ([!1348](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1348)) (Mark Krentel)
+- Fixed recovery of CFGs and static call sites for Intel GPUs. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Fixed CFG construction debugging code that became stale. ([!1371](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1371)) (John Mellor-Crummey)
+- Fixed a crash in `hpcprof-mpi` with `-M stats` where Partials were only added to rank 0, by extending Metrics in all ranks with the requested set of Statistics/Partials. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1365)) (Jonathon Anderson)
+- Fixed a numerical error in `hpcprof` when atomically combining non-zero data values (for `min()`/`max()` accumulators) by actively ignoring zeros. ([!1365](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1365)) (Jonathon Anderson)
+- Fixed Expression evaluation errors in `hpcprof` where some operators were evaluated incorrectly. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1365)) (Jonathon Anderson)
+
+### Removed
+
+- Removed obsolete and unmaintained Intel OpenCL + PAPI support, OpenCL blame shifting code, and related GPU operation components ([!1317](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1317)) (John Mellor-Crummey)
+- Removed the redundant `devices_mutex_` protecting access to the devices map in Level Zero tracing callbacks. ([!1350](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1350)) (Mark Krentel)
+- Removed the Python `tools/make-venv.py` script. ([!1343](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1343)) (Jonathon Anderson)
+- Removed the `api/` prefix from `GTPin` headers include paths. ([!1329](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1329)) (Jonathon Anderson)
+- Removed test data `*.license` files, now expressed implicitly via `REUSE.toml`. ([!1357](https://gitlab.com/hpctoolkit/hpctoolkit/-/merge_requests/1357)) (Jonathon Anderson)
+
 ## [2025.0.1] - 2025-09-09
 
 ### Added
