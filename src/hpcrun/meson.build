@@ -848,8 +848,8 @@ libs += preload_ga_lib
 
 # Symbols needed for integration with rocprofiler-sdk are defined by this foil
 if rocm_dep.found()
-  preload_rocm_lib = shared_library(
-    'hpcrun_preload_rocm',
+  preload_rocm_rawlib = shared_library(
+    'hpcrun_preload_rocm_UNSANITIZED',
     'foil/common-preload.c',
     'foil/rocm-preload.c',
     gnu_symbol_visibility: 'hidden',
@@ -859,12 +859,20 @@ if rocm_dep.found()
       rocm_dep.partial_dependency(compile_args: true, includes: true),
       threads_dep,
     ],
+    link_language: 'c',
+  )
+  preload_rocm_lib_soname = fs.name(preload_rocm_rawlib.full_path()).replace(
+    '_UNSANITIZED',
+    '',
+  )
+  preload_rocm_lib = custom_target(
+    input: preload_rocm_rawlib,
+    output: preload_rocm_lib_soname,
+    command: [patchelf, '--remove-rpath', '--output', '@OUTPUT@', '@INPUT@'],
     install: true,
+    install_dir: get_option('libdir'),
   )
-  hpcrun_sonames.set_quoted(
-    'HPCRUN_PRELOAD_ROCM_SO',
-    fs.name(preload_rocm_lib.full_path()),
-  )
+  hpcrun_sonames.set_quoted('HPCRUN_PRELOAD_ROCM_SO', preload_rocm_lib_soname)
   libs += preload_rocm_lib
   dlopen_rocm_lib = shared_library(
     'hpcrun_dlopen_rocm',
