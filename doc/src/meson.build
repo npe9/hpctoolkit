@@ -15,7 +15,11 @@ manual_f = get_option('manual').enable_if(
   error_message: 'PDF manual cannot be enabled without HTML manual',
 )
 
-sphinx_args = ['-q', '-W', '--keep-going', '--jobs=auto', '@CURRENT_SOURCE_DIR@']
+sphinx_args = ['-q', '--keep-going', '--jobs=auto', '@CURRENT_SOURCE_DIR@']
+if get_option('werror')
+  sphinx_args += ['-W']
+endif
+
 sphinx_rc_args = [
   '-bdummy',
   '-q',

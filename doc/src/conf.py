@@ -8,6 +8,7 @@
 
 import os
 import re
+import time
 from importlib import import_module
 from pathlib import Path, PurePath
 from typing import Dict, Optional, Tuple
@@ -72,6 +73,49 @@ def parse_requirements_txt(
             del ext_vers[ext]
 
     return sphinx_ver, ext_vers
+
+
+MIN_VALID_MTIME = time.strptime("1980-01-01 00:00:00", "%Y-%m-%d %H:%M:%S")
+MIN_VALID_MTIME_SEC = time.mktime(MIN_VALID_MTIME)
+
+
+def maybe_fix_file_timestamps() -> None:
+    """
+    Fix the modified timestamp on the given file to be within a valid range.
+
+    All known versions of Sphinx are currently affected by a bug where if static source
+    files have a modified time before 1980, the EPUB3Builder crashes.
+    See https://github.com/sphinx-doc/sphinx/issues/14168 for details.
+
+    Due to this bug, we need to fix the modified time for all affected source files.
+    """
+
+    def fix(file: Path) -> None:
+        try:
+            file_stat = file.lstat()
+            mtime = time.localtime(file_stat.st_mtime)
+            if mtime < MIN_VALID_MTIME:
+                print(
+                    f"conf.py: Adjusting faulty modified time on {file} (was {time.strftime('%a, %d %b %Y %H:%M:%S +0000', mtime)})"
+                )
+                os.utime(
+                    file,
+                    times=(file_stat.st_atime, MIN_VALID_MTIME_SEC),
+                    follow_symlinks=False,
+                )
+        except OSError:
+            pass
+
+    for file in html_static_path:
+        fix(Path(__file__).parent / Path(file))
+    for parent, subdirs, files in os.walk(Path(__file__).parent):
+        for subdir in subdirs:
+            path = Path(parent) / subdir
+            fix(path)
+        for fn in files:
+            path = Path(parent) / fn
+            if path.suffix in (".svg", ".png", ".jpg", ".gif"):
+                fix(path)
 
 
 # Project settings
@@ -166,3 +210,7 @@ if os.environ["CONF_VERSIONS_URL"]:
 
 # Configuration for the EPUB output
 epub_basename = project.lower()
+
+
+# Before leaving and starting the build, fix file timestamps that need to be fixed.
+maybe_fix_file_timestamps()
