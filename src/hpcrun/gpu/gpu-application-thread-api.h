@@ -36,6 +36,13 @@ gpu_application_thread_process_activities
 );
 
 
+void
+gpu_application_thread_process_all_activities
+(
+ void
+);
+
+
 cct_node_t *
 gpu_application_thread_correlation_callback
 (

@@ -30,6 +30,7 @@
 
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
 #include <alloca.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -47,6 +48,7 @@
 #include "queue.h"
 #include "spinlock.h"
 #include "../audit/audit-api.h"
+#include "../lithe/lithe-tool.h"
 
 /*
  *----------------------------------------------------------------------
@@ -127,13 +129,67 @@ extern char monitor_thread_fence4;
  *  specific data is not yet set, so it's not really an error for
  *  getspecific to fail.  But bad magic implies an internal error.
  */
+/*
+ *  Lithe harts (lithe/lithe-tool.h, 2026-10-27): the TLS, and so the thread-specific
+ *  data, belongs to the user-level context running on the hart, not to the OS
+ *  thread. The node of a hart's OS thread is recorded at hart start and found by
+ *  hart id.
+ */
+static struct monitor_thread_node **monitor_lithe_hart_tn;
+
+static struct monitor_thread_node *
+monitor_lithe_tn(void)
+{
+    int h = hpcrun_lithe_current_hart();
+    if (h < 0 || monitor_lithe_hart_tn == NULL)
+        return NULL;
+    return monitor_lithe_hart_tn[h];
+}
+
+static struct monitor_thread_node *
+monitor_specific_tn(void)
+{
+    struct monitor_thread_node *tn = monitor_lithe_tn();
+    return tn != NULL ? tn : pthread_getspecific(monitor_pthread_key);
+}
+
+/* On the hart's pthread, its own TLS (parlib tool hart_start). */
+void
+monitor_lithe_record_hart(int hart, int max_harts)
+{
+    if (monitor_lithe_hart_tn == NULL) {
+        struct monitor_thread_node **t = calloc(max_harts, sizeof(*t));
+        if (t == NULL
+            || !__sync_bool_compare_and_swap(&monitor_lithe_hart_tn, NULL, t))
+            free(t);
+    }
+    if (monitor_lithe_hart_tn != NULL && hart >= 0 && hart < max_harts)
+        monitor_lithe_hart_tn[hart] = pthread_getspecific(monitor_pthread_key);
+}
+
+/* On a parlib service thread or the parked main thread (parlib tool aux_thread):
+ * all its signals are blocked, so the exit shootdown could never reach it and
+ * waited out MONITOR_SHOOTDOWN_TIMEOUT. The main thread is told by its tid: its
+ * %fs is a hart's TLS by the time it parks. */
+void
+monitor_lithe_aux_self(void)
+{
+    struct monitor_thread_node *tn;
+    if (syscall(SYS_gettid) == getpid())
+        tn = monitor_get_main_tn();
+    else
+        tn = pthread_getspecific(monitor_pthread_key);
+    if (tn != NULL && tn->tn_magic == MONITOR_TN_MAGIC)
+        tn->tn_lithe_aux = 1;
+}
+
 struct monitor_thread_node *
 monitor_get_tn(void)
 {
     struct monitor_thread_node *tn;
 
     if (monitor_has_used_threads) {
-        tn = pthread_getspecific(monitor_pthread_key);
+        tn = monitor_specific_tn();
         if (tn != NULL && tn->tn_magic != MONITOR_TN_MAGIC) {
             MONITOR_WARN_NO_TID("bad magic in thread node: %p\n", tn);
             tn = NULL;
@@ -321,7 +377,7 @@ monitor_shootdown_handler(int sig)
     struct monitor_thread_node *tn;
     int old_state;
 
-    tn = pthread_getspecific(monitor_pthread_key);
+    tn = monitor_specific_tn();
     if (tn == NULL) {
         MONITOR_WARN1("unable to deliver monitor_fini_thread callback: "
                       "pthread_getspecific() failed\n");
@@ -400,7 +456,7 @@ monitor_thread_shootdown(void)
      */
     self = auditor_exports()->pthread_self();
     main_tn = monitor_get_main_tn();
-    if (! PTHREAD_EQUAL(self, main_tn->tn_self)) {
+    if (! PTHREAD_EQUAL(self, main_tn->tn_self) && ! main_tn->tn_lithe_aux) {
         main_tn->tn_appl_started = 1;
         main_tn->tn_fini_started = 0;
         main_tn->tn_fini_done = 0;
@@ -433,11 +489,31 @@ monitor_thread_shootdown(void)
                 my_tn = tn;
                 continue;
             }
-            if (tn->tn_appl_started) {
+            if (tn->tn_appl_started && !tn->tn_lithe_aux) {
                 if (tn->tn_fini_started) {
                     num_started++;
                 } else {
                     auditor_exports()->pthread_kill(tn->tn_self, shootdown_signal);
+                    if (monitor_debug) {
+                        /* which object the start routine is in (dladdr cannot see
+                         * the application's namespace from hpcrun's) */
+                        char line[512], obj[400] = "?";
+                        unsigned long a = (unsigned long)tn->tn_start_routine, lo, hi, off = 0;
+                        FILE *mf = fopen("/proc/self/maps", "r");
+                        while (mf && fgets(line, sizeof line, mf)) {
+                            char path[400] = "";
+                            unsigned long fo;
+                            if (sscanf(line, "%lx-%lx %*s %lx %*s %*s %399s", &lo, &hi, &fo, path) >= 3
+                                && a >= lo && a < hi) {
+                                snprintf(obj, sizeof obj, "%s", path);
+                                off = a - lo + fo;
+                                break;
+                            }
+                        }
+                        if (mf) fclose(mf);
+                        MONITOR_DEBUG("signalled tid %d (main %d, aux %d, start %s+0x%lx)\n", tn->tn_tid,
+                                      (int)tn->tn_is_main, (int)tn->tn_lithe_aux, obj, off);
+                    }
                     num_unstarted++;
                 }
                 if (tn->tn_fini_done)
@@ -545,7 +621,8 @@ int
 monitor_unwind_thread_bottom_frame(void *addr)
 {
     return (&monitor_thread_fence1 <= (char *) addr
-            && (char *) addr <= &monitor_thread_fence4);
+            && (char *) addr <= &monitor_thread_fence4)
+        || hpcrun_lithe_stack_base_pc(addr);   /* Lithe context bases */
 }
 
 /*

@@ -39,6 +39,7 @@
 #include "ompt-callstack.h"
 #include "ompt-defer.h"
 #include "ompt-interface.h"
+#include "../messages/messages.h"
 #include "ompt-queues.h"
 #include "ompt-region.h"
 #include "ompt-specific.h"
@@ -549,6 +550,7 @@ ompt_initialize
 #endif
 
   ompt_initialized = 1;
+  TMSG(OMPT, "ompt_initialize: runtime %s", ompt_runtime_version ? ompt_runtime_version : "?");
 
   ompt_init_inquiry_fn_ptrs(lookup);
 

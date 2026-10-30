@@ -17,6 +17,7 @@
 #include "sample-sources/pthread-blame.h"
 #include "sample-sources/perf/perf_constants.h"
 #include "unwind/common/binarytree_uwi.h"
+#include "lithe/lithe-tool.h"
 
 struct cct_node_t;
 struct csklnode_s;
@@ -33,6 +34,13 @@ void * hpcrun_tls_specific_init_thread(void);
 static inline void *
 lazy_getspecific(void)
 {
+  // Lithe harts (lithe/lithe-tool.h): per-OS-thread state, found by hart id; the
+  // TLS belongs to the running context (and a lazy malloc here ran in the signal
+  // handler, once per context).
+  int h = hpcrun_lithe_current_hart();
+  if (h >= 0 && hpcrun_lithe_hart_tls[h] != NULL) {
+    return hpcrun_lithe_hart_tls[h];
+  }
   void * spec = pthread_getspecific(hpcrun_get_tls_key());
 
   if (spec != NULL) {

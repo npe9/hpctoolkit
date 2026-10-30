@@ -92,6 +92,7 @@
 #include "../display.h" // api to display available events
 
 #include "../../../common/lean/compress.h"
+#include "../../lithe/lithe-tool.h"
 
 //******************************************************************************
 // macros
@@ -216,8 +217,10 @@ perf_start_all(int nevents, event_thread_t *event_thread, bool need_reset)
     if (fd<0)
       continue;
 
-    if (need_reset)
+    if (need_reset) {
       ioctl(fd, PERF_EVENT_IOC_RESET, 0);
+      event_thread[i].old_value = 0;  // the kernel aggregate restarts at 0
+    }
 
     ret = ioctl(fd, PERF_EVENT_IOC_ENABLE, 0);
 
@@ -506,7 +509,8 @@ record_sample(
   // the estimate count = raw_count * scale_factor
   //              = metric_inc * time_enabled / time running
   // ----------------------------------------------------------------------------
-  double scale_f = (double) time_enabled / time_running;
+  // time_running 0 (never scheduled on the PMU yet) would make this inf.
+  double scale_f = time_running ? (double) time_enabled / time_running : 1.0;
 
   // ----------------------------------------------------------------------------
   // For every members of the group: update the cct and add callchain if necessary
@@ -530,7 +534,12 @@ record_sample(
     // since Linux perf_events store the aggregate value instead of the new one,
     // we have to subtract it with the previous value:
     //      metric value = the current aggregate value - previous aggregate one
-    u64 value = mmap_data->samples.values[i].value - current->old_value;
+    // An aggregate below the previous one means the counter was reset in between
+    // (PERF_EVENT_IOC_RESET on restart); unsigned subtraction wrapped to ~1.8e19 and
+    // charged it to the main thread on Tuolumne (stock and Lithe libomp alike).
+    u64 value = mmap_data->samples.values[i].value >= current->old_value
+                    ? mmap_data->samples.values[i].value - current->old_value
+                    : mmap_data->samples.values[i].value;
     double counter = scale_f * (double) value;
 
     // store the current value for the next sample usage
@@ -1140,8 +1149,9 @@ perf_event_handler(
 
   if (event_index < 0) {
     // signal not from perf event
-    TMSG(LINUX_PERF, "signal si_code %d with fd %d: unknown perf event",
-       siginfo->si_code, fd);
+    TMSG(LINUX_PERF, "signal si_code %d with fd %d: unknown perf event (tid %d hart %d td %p, %d events, fd0 %d)",
+       siginfo->si_code, fd, (int)syscall(SYS_gettid), hpcrun_lithe_current_hart(),
+       hpcrun_get_thread_data(), nevents, nevents > 0 ? event_thread[0].fd : -9);
 
     perf_start_all(nevents, event_thread, false);
     hpcrun_safe_exit();

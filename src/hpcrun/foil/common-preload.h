@@ -53,6 +53,10 @@ const struct hpcrun_foil_hookdispatch_mpi* hpcrun_foil_fetch_hooks_mpi_dl();
 /// exposure. See ::hpcrun_foil_fetch_hooks_ompt.
 const struct hpcrun_foil_hookdispatch_ompt* hpcrun_foil_fetch_hooks_ompt_dl();
 
+/// Fetch the dispatch-table of hooks for the Lithe/parlib tool foil without symbol
+/// exposure. See ::hpcrun_foil_fetch_hooks_lithe.
+const struct hpcrun_foil_hookdispatch_lithe* hpcrun_foil_fetch_hooks_lithe_dl();
+
 /// Fetch the dispatch-table of hooks for the OpenCL foil without symbol exposure.
 /// See ::hpcrun_foil_fetch_hooks_opencl.
 const struct hpcrun_foil_hookdispatch_opencl* hpcrun_foil_fetch_hooks_opencl_dl();

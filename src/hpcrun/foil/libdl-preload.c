@@ -16,6 +16,7 @@
 
 #include <dlfcn.h>
 #include <elf.h>
+#include <link.h>
 #include <pthread.h>
 #include <sched.h>
 #include <stddef.h>
@@ -218,10 +219,47 @@ const auditor_exports_t* hpcrun_connect_to_auditor() {
 }
 
 // The remainder here is overloads for dl* that update as per the usual
+// glibc resolves a slash-free dlopen name against the CALLING object's DT_RUNPATH/RPATH
+// ($ORIGIN included). Through this override the caller is us, so a library that dlopens a
+// sibling by bare name -- PyTorch's lazy NVRTC stub, libcaffe2_nvrtc.so from libtorch's
+// $ORIGIN, in Adam.step's CUDA-graph health check -- failed only under hpcrun (2026-10-28
+// baseline: gpt_train 0/6 profiled, 6/6 bare). On such a failure, retry along the real
+// caller's own search list (dlinfo RTLD_DI_SERINFO expands its RUNPATH).
+static void* dlopen_as_caller(const char* fn, int flags, const void* ret) {
+  Dl_info info;
+  struct link_map* lm = NULL;
+  if (dladdr1(ret, &info, (void**)&lm, RTLD_DL_LINKMAP) == 0 || lm == NULL)
+    return NULL;
+  Dl_serinfo size;
+  if (dlinfo(lm, RTLD_DI_SERINFOSIZE, &size) != 0 || size.dls_size == 0)
+    return NULL;
+  Dl_serinfo* si = malloc(size.dls_size);
+  if (si == NULL)
+    return NULL;
+  void* out = NULL;
+  if (dlinfo(lm, RTLD_DI_SERINFOSIZE, si) == 0 && dlinfo(lm, RTLD_DI_SERINFO, si) == 0) {
+    for (unsigned i = 0; i < si->dls_cnt && out == NULL; i++) {
+      char path[4096];
+      if (snprintf(path, sizeof(path), "%s/%s", si->dls_serpath[i].dls_name, fn) <
+          (int)sizeof(path))
+        out = real_dlopen(path, flags);
+    }
+  }
+  free(si);
+  return out;
+}
+
 HPCRUN_EXPOSED_API void* dlopen(const char* fn, int flags) {
   if (!real_dlopen)
     return ((void* (*)(const char*, int))dlsym(RTLD_NEXT, "dlopen"))(fn, flags);
   void* out = real_dlopen(fn, flags);
+  if (out == NULL && fn != NULL && strchr(fn, '/') == NULL) {
+    void* retry = dlopen_as_caller(fn, flags, __builtin_return_address(0));
+    if (retry != NULL)
+      out = retry;
+    else
+      (void)real_dlopen(fn, flags); // leave the original dlerror() for the caller
+  }
   if (fn != NULL && strcmp(fn, HPCRUN_SO) == 0)
     return out;
   if (hooks != NULL && (flags & RTLD_NOLOAD) == 0 && update_shadow()) {

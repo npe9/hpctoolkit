@@ -114,6 +114,7 @@ static struct pfn_fetch_hooks_t {
   const struct hpcrun_foil_hookdispatch_ga* (*ga)();
   const struct hpcrun_foil_hookdispatch_mpi* (*mpi)();
   const struct hpcrun_foil_hookdispatch_ompt* (*ompt)();
+  const struct hpcrun_foil_hookdispatch_lithe* (*lithe)();
   const struct hpcrun_foil_hookdispatch_opencl* (*opencl)();
   const struct hpcrun_foil_hookdispatch_level0* (*level0)();
   const struct hpcrun_foil_hookdispatch_rocm* (*rocm)();
@@ -163,6 +164,7 @@ static void load_core_foil() {
       .ga = core_dlsym(h, "hpcrun_foil_fetch_hooks_ga"),
       .mpi = core_dlsym(h, "hpcrun_foil_fetch_hooks_mpi"),
       .ompt = core_dlsym(h, "hpcrun_foil_fetch_hooks_ompt"),
+      .lithe = core_dlsym(h, "hpcrun_foil_fetch_hooks_lithe"),
       .opencl = core_dlsym(h, "hpcrun_foil_fetch_hooks_opencl"),
       .level0 = core_dlsym(h, "hpcrun_foil_fetch_hooks_level0"),
       .rocm = core_dlsym(h, "hpcrun_foil_fetch_hooks_rocm"),
@@ -192,6 +194,11 @@ const struct hpcrun_foil_hookdispatch_mpi* hpcrun_foil_fetch_hooks_mpi_dl() {
 const struct hpcrun_foil_hookdispatch_ompt* hpcrun_foil_fetch_hooks_ompt_dl() {
   call_once(&load_core_foil_once, load_core_foil);
   return pfn_fetch_hooks.ompt();
+}
+
+const struct hpcrun_foil_hookdispatch_lithe* hpcrun_foil_fetch_hooks_lithe_dl() {
+  call_once(&load_core_foil_once, load_core_foil);
+  return pfn_fetch_hooks.lithe();
 }
 
 const struct hpcrun_foil_hookdispatch_opencl* hpcrun_foil_fetch_hooks_opencl_dl() {

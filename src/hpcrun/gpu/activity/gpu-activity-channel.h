@@ -93,4 +93,11 @@ gpu_activity_channel_receive_all
 );
 
 
+void
+gpu_activity_channel_receive_all_channels
+(
+ void (*receive_fn)(gpu_activity_t *)
+);
+
+
 #endif

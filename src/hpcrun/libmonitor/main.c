@@ -208,6 +208,16 @@ monitor_begin_process_fcn(void *user_data, int is_fork)
  *  deadlock if the application calls exit() from its own exit
  *  handler.  (It shouldn't do that, but it might.)
  */
+/*
+ *  The winner's TLS: under Lithe the thread node is the hart's, and the
+ *  context that called exit() can come back here (libc's fini, after
+ *  atexit handlers that yield) on another hart.  It is still the same
+ *  thread of the program -- its TLS moved with it -- not a race loser,
+ *  and must not take the loser's 2 s delay (LULESH exited 2 s late).
+ */
+static __thread char monitor_exit_mark;
+static char *monitor_exit_winner = NULL;
+
 void
 monitor_end_process_fcn(int how)
 {
@@ -223,6 +233,7 @@ monitor_end_process_fcn(int how)
         if (tn != NULL) {
             tn->tn_exit_win = 1;
         }
+        monitor_exit_winner = &monitor_exit_mark;
         MONITOR_DEBUG("calling monitor_begin_process_exit (how = %d) ...\n", how);
         monitor_begin_process_exit(how);
 
@@ -231,7 +242,8 @@ monitor_end_process_fcn(int how)
         MONITOR_DEBUG("calling monitor_fini_process (how = %d) ...\n", how);
         monitor_fini_process(how, monitor_main_tn.tn_user_data);
     }
-    else if (tn != NULL && tn->tn_exit_win) {
+    else if ((tn != NULL && tn->tn_exit_win)
+             || monitor_exit_winner == &monitor_exit_mark) {
         /*
          * Repeat winner: somehow this thread has started process exit
          * again.  Assume the callbacks have had their chance.

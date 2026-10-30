@@ -44,6 +44,7 @@
 
 #include "../common/lean/placeholders.h"
 
+#include "lithe/lithe-tool.h"
 #include "main.h"
 
 #include "disabled.h"
@@ -713,6 +714,9 @@ hpcrun_fini_internal()
 
     hpcrun_process_aux_cleanup_action();
 
+    // Lithe: every context's profile and trace (lithe/lithe-tool.h).
+    hpcrun_lithe_process_fini();
+
     int is_process = 1;
     thread_finalize(is_process);
 
@@ -1321,6 +1325,9 @@ monitor_fini_thread(void* init_thread_data)
   }
 
   hpcrun_safe_enter();
+
+  // A Lithe hart: put its own profile back before it is finalized.
+  hpcrun_lithe_thread_fini();
 
   epoch_t *epoch = (epoch_t *)init_thread_data;
   hpcrun_thread_fini(epoch);

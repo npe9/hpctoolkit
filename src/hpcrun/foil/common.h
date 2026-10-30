@@ -66,6 +66,7 @@ struct hpcrun_foil_hookdispatch_ompt;
 struct hpcrun_foil_hookdispatch_opencl;
 struct hpcrun_foil_hookdispatch_rocprofiler;
 struct hpcrun_foil_hookdispatch_level0;
+struct hpcrun_foil_hookdispatch_lithe;
 
 /// Fetch the dispatch-table of hooks for the client foil.
 /// Thread-safe but not async-signal-safe.
@@ -96,6 +97,12 @@ const struct hpcrun_foil_hookdispatch_mpi* hpcrun_foil_fetch_hooks_mpi();
 /// @returns A pointer to the corresponding dispatch-table in the main hpcrun namespace.
 HPCRUN_EXPOSED_API
 const struct hpcrun_foil_hookdispatch_ompt* hpcrun_foil_fetch_hooks_ompt();
+
+/// Fetch the dispatch-table of hooks for the Lithe/parlib tool foil.
+/// Thread-safe but not async-signal-safe.
+/// @returns A pointer to the corresponding dispatch-table in the main hpcrun namespace.
+HPCRUN_EXPOSED_API
+const struct hpcrun_foil_hookdispatch_lithe* hpcrun_foil_fetch_hooks_lithe();
 
 /// Fetch the dispatch-table of hooks for the OpenCL foil.
 /// Thread-safe but not async-signal-safe.

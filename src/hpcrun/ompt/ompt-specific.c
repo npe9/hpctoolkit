@@ -33,16 +33,20 @@
 
 //----------------------------------------------------------------------
 
-// Allocate and initialize the ompt TLS variables.
+size_t
+hpcrun_ompt_specific_size(void)
+{
+  return sizeof(struct ompt_tls_data);
+}
+
+// Initialize a block of hpcrun_ompt_specific_size() bytes: one per OpenMP thread.
+// Lithe contexts get theirs from lithe/lithe-tool.c (hpcrun_malloc'd: no malloc in
+// vcore context); OS threads from hpcrun_ompt_alloc_specific.
 //
 void *
-hpcrun_ompt_alloc_specific(void)
+hpcrun_ompt_init_specific(void *mem)
 {
-  struct ompt_tls_data * data = malloc(sizeof(struct ompt_tls_data));
-
-  if (data == NULL) {
-    hpcrun_abort("hpcrun: malloc(ompt_tls_data) failed");
-  }
+  struct ompt_tls_data * data = mem;
 
   memset(data, 0, sizeof(struct ompt_tls_data));
 
@@ -65,4 +69,18 @@ hpcrun_ompt_alloc_specific(void)
   data->ompt_thread_type = ompt_thread_unknown;
 
   return data;
+}
+
+// Allocate and initialize the ompt TLS variables.
+//
+void *
+hpcrun_ompt_alloc_specific(void)
+{
+  struct ompt_tls_data * data = malloc(sizeof(struct ompt_tls_data));
+
+  if (data == NULL) {
+    hpcrun_abort("hpcrun: malloc(ompt_tls_data) failed");
+  }
+
+  return hpcrun_ompt_init_specific(data);
 }

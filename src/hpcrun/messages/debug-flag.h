@@ -117,6 +117,9 @@
  E(MEM2), \
  E(SAMPLE_FILTER), \
  E(THREAD_SPECIFIC), \
+ E(LITHE), \
+  E(CXI), \
+  E(OMPT), \
  E(DSO), \
  E(DL_BOUND), \
  E(ADD_MODULE_BASE), \

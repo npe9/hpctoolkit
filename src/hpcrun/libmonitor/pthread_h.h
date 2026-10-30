@@ -37,6 +37,8 @@ struct monitor_thread_node {
     volatile char  tn_fini_done;
     volatile char  tn_exit_win;
     volatile char  tn_block_shootdown;
+    volatile char  tn_lithe_aux;   /* parlib service thread: no application code, all
+                                      signals blocked; skipped by the exit shootdown */
 };
 
 struct monitor_thread_node *monitor_get_tn(void);

@@ -207,3 +207,27 @@ gpu_activity_channel_receive_all
     mpscq_deallocate(entry);
   }
 }
+
+
+// Every channel, not just the caller's: for process fini under Lithe, where the
+// threads that own channels are contexts that are already gone (lithe/lithe-tool.c).
+// Only safe when nothing else consumes (single-consumer queues).
+void
+gpu_activity_channel_receive_all_channels
+(
+ void (*receive_fn)(gpu_activity_t *)
+)
+{
+  uint32_t n = atomic_load(&next_channel_id);
+  for (uint32_t id = 1; id < n; id++) {
+    gpu_activity_channel_t *channel = ch_map_get(&channel_map, id);
+    for (;;) {
+      mpscq_entry_t *entry = mpscq_dequeue(&channel->base);
+      if (entry == NULL) {
+        break;
+      }
+      receive_fn(&entry->activity);
+      mpscq_deallocate(entry);
+    }
+  }
+}

@@ -42,6 +42,7 @@
 #include "memory/mmap.h"
 #include "../common/lean/id-tuple.h"
 #include "../common/lean/OSUtil.h"
+#include "lithe/lithe-tool.h"
 
 
 //***************************************************************************
@@ -116,6 +117,14 @@ hpcrun_set_thread_data
 )
 {
   TMSG(THREAD_SPECIFIC,"setting td");
+  // On a Lithe hart the lookups go by hart id (lithe/lithe-tool.h), so an explicit
+  // set (the GPU trace code allocates a stream's data, then restores its own) must
+  // move the hart's slot, or the new data is initialized through the hart's.
+  int h = hpcrun_lithe_current_hart();
+  if (h >= 0 && hpcrun_lithe_hart_td[h] != NULL && td != NULL) {
+    hpcrun_lithe_hart_td[h] = td;
+    return;
+  }
   pthread_setspecific(_hpcrun_key, (void *) td);
 }
 
@@ -124,6 +133,18 @@ hpcrun_set_thread_data
 
 static thread_data_t*
 hpcrun_get_thread_data_local
+(
+  void
+)
+{
+  return &_local_td;
+}
+
+
+// The main thread's data, for Lithe (lithe/lithe-tool.c): once its context has moved
+// to a hart, the main OS thread parks and its data is written at process fini.
+thread_data_t*
+hpcrun_thread0_data
 (
   void
 )
@@ -142,12 +163,27 @@ hpcrun_get_thread_data_local_avail
 }
 
 
+// Lithe harts (lithe/lithe-tool.h): the TLS belongs to the running context, so the
+// state of this OS thread is found by hart id. NULL: not a hart, or not registered.
+static inline thread_data_t*
+lithe_hart_td
+(
+  void
+)
+{
+  int h = hpcrun_lithe_current_hart();
+  return h >= 0 ? hpcrun_lithe_hart_td[h] : NULL;
+}
+
+
 thread_data_t*
 hpcrun_safe_get_td
 (
   void
 )
 {
+  thread_data_t *ltd = lithe_hart_td();
+  if (ltd) return ltd;
   if (use_getspecific) {
     return (thread_data_t *) pthread_getspecific(_hpcrun_key);
   }
@@ -163,7 +199,9 @@ hpcrun_get_thread_data_specific
   void
 )
 {
-  thread_data_t *ret = (thread_data_t *) pthread_getspecific(_hpcrun_key);
+  thread_data_t *ret = lithe_hart_td();
+  if (ret) return ret;
+  ret = (thread_data_t *) pthread_getspecific(_hpcrun_key);
   if (!ret){
     hpcrun_terminate();
   }
@@ -177,6 +215,7 @@ hpcrun_get_thread_data_specific_avail
   void
 )
 {
+  if (lithe_hart_td()) return true;
   thread_data_t *ret = (thread_data_t *) pthread_getspecific(_hpcrun_key);
   return !(ret == NULL);
 }

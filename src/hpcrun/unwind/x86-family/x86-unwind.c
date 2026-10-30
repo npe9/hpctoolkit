@@ -101,6 +101,17 @@ static int DEBUG_NO_LONGJMP = 0;
 static void
 update_cursor_with_troll(hpcrun_unw_cursor_t* cursor, int offset);
 
+// A zero return address ends the stack (SysV ABI convention). parlib writes one at
+// the base of every context stack and of the vcore stack on each re-entry (2026-10-27).
+// A complete unwind, but no fence: the outermost frame is a real function (a vcore
+// re-entry target), not a tool frame to replace with <thread root>.
+static step_state
+unw_step_zero_ra(hpcrun_unw_cursor_t* cursor)
+{
+  TMSG(UNW, "  step: STEP_STOP, zero return address (outermost frame)");
+  return STEP_STOP;
+}
+
 static step_state
 unw_step_sp(hpcrun_unw_cursor_t* cursor);
 
@@ -428,6 +439,11 @@ hpcrun_unw_step(hpcrun_unw_cursor_t *cursor)
 
     unw_res = libunw_unw_step(cursor);
 
+    // libunwind stepped onto a zero return address: the outermost frame was the
+    // last one (see unw_step_zero_ra).
+    if (unw_res > STEP_STOP && cursor->pc_unnorm == NULL)
+      return STEP_STOP;
+
     if (unw_res > STEP_STOP) {
       // Invariant: unwind must move x86 stack pointer (up, since stacks grow down)
       if (prev_sp >= cursor->sp) {
@@ -508,6 +524,7 @@ unw_step_sp(hpcrun_unw_cursor_t* cursor)
   void** next_sp = (void **)(sp + xr->reg.sp_ra_pos);
   void*  ra_loc  = (void*) next_sp;
   void*  next_pc  = *next_sp++;
+  if (next_pc == NULL) return unw_step_zero_ra(cursor);
 
   if ((RA_BP_FRAME == xr->ra_status) ||
       (RA_STD_FRAME == xr->ra_status)) { // Makes sense to sanity check BP, do it
@@ -602,6 +619,7 @@ unw_step_bp(hpcrun_unw_cursor_t* cursor)
   void **next_sp  = (void **)((void *)bp + xr->reg.bp_ra_pos);
   void* ra_loc = (void*) next_sp;
   void *next_pc  = *next_sp++;
+  if (next_pc == NULL) return unw_step_zero_ra(cursor);
 
   // invariant: unwind must move x86 stack pointer
   if ((void *)next_sp <= sp) {

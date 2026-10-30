@@ -11,6 +11,7 @@
 #define _GNU_SOURCE
 
 #include "../cct/cct.h"
+#include "../lithe/lithe-tool.h"
 #include "../module-ignore-map.h"
 #include "../safe-sampling.h"
 #include "../sample_event.h"
@@ -114,7 +115,10 @@ receive_activity
 )
 {
   gpu_activity_process(activity);
+  hpcrun_lithe_metrics_t owner;
+  hpcrun_lithe_metrics_enter(activity->cct_node, &owner);
   gpu_metrics_attribute(activity);
+  hpcrun_lithe_metrics_leave(&owner);
 }
 
 
@@ -163,4 +167,16 @@ gpu_application_thread_correlation_callback_rt1
   // return the first frame in the runtime
   return gpu_application_thread_correlation_callback_impl
     (correlation_id, true);
+}
+
+
+// Drain every thread's channel (Lithe process fini: contexts that launched work have
+// exited without a thread fini).
+void
+gpu_application_thread_process_all_activities
+(
+ void
+)
+{
+  gpu_activity_channel_receive_all_channels(receive_activity);
 }
